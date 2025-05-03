@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>IDS Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <h1>Intrusion Detection System Dashboard</h1>
+    <div class="container">
+      <div class="controls">
+        <h2>Start Monitoring</h2>
+        <button onclick="startSniffer()">Start Sniffer</button>
+
+        <h2>Simulate Attacks</h2>
+        <button onclick="triggerAttack('phishing')">Phishing</button>
+        <button onclick="triggerAttack('sql')">SQL Injection</button>
+        <button onclick="triggerAttack('scan')">Port Scan</button>
+        <button onclick="triggerAttack('tcp')">TCP Normal</button>
+        <button onclick="triggerAttack('udp')">UDP Normal</button>
+        <button onclick="triggerAttack('ddos')">DDoS</button>
+      </div>
+      <div class="logs">
+        <h2>Real-Time Logs</h2>
+        <pre id="log-box">Loading logs...</pre>
+      </div>
+    </div>
+
+    <script>
+      function startSniffer() {
+        fetch("/start_sniffer", {
+          method: "POST",
+        })
+          .then((res) => res.json())
+          .then((data) => alert(data.message));
+      }
+
+      function triggerAttack(type) {
+        fetch("/run_attack", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ attack: type }),
+        })
+          .then((res) => res.json())
+          .then((data) => alert(data.message));
+      }
+
+      function fetchLogs() {
+        fetch("/logs")
+          .then((res) => res.json())
+          .then((data) => {
+            document.getElementById("log-box").textContent = data.logs.join("");
+          });
+      }
+
+      setInterval(fetchLogs, 3000);
+      fetchLogs();
+    </script>
+  </body>
+</html>
