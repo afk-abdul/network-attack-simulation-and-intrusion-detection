@@ -2,59 +2,245 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IDS Dashboard</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <h1>Intrusion Detection System Dashboard</h1>
+    <div class="header">
+      <h1>Intrusion Detection System Dashboard</h1>
+    </div>
+
     <div class="container">
       <div class="controls">
-        <h2>Start Monitoring</h2>
-        <button onclick="startSniffer()">Start Sniffer</button>
+        <div class="control-card">
+          <h2>Sniffer Control</h2>
+          <div class="status-indicator">
+            Status: <span id="sniffer-status">Checking...</span>
+          </div>
+          <div class="button-group">
+            <button id="start-button" onclick="startSniffer()">
+              Start Sniffer
+            </button>
+            <button id="stop-button" onclick="stopSniffer()">
+              Stop Sniffer
+            </button>
+          </div>
+        </div>
 
-        <h2>Simulate Attacks</h2>
-        <button onclick="triggerAttack('phishing')">Phishing</button>
-        <button onclick="triggerAttack('sql')">SQL Injection</button>
-        <button onclick="triggerAttack('scan')">Port Scan</button>
-        <button onclick="triggerAttack('tcp')">TCP Normal</button>
-        <button onclick="triggerAttack('udp')">UDP Normal</button>
-        <button onclick="triggerAttack('ddos')">DDoS</button>
+        <div class="control-card">
+          <h2>Attack Simulation</h2>
+          <div class="button-group">
+            <button class="attack-button" onclick="triggerAttack('phishing')">
+              Phishing
+            </button>
+            <button class="attack-button" onclick="triggerAttack('sql')">
+              SQL Injection
+            </button>
+            <button class="attack-button" onclick="triggerAttack('scan')">
+              Port Scan
+            </button>
+            <button class="attack-button" onclick="triggerAttack('tcp')">
+              TCP Normal
+            </button>
+            <button class="attack-button" onclick="triggerAttack('udp')">
+              UDP Normal
+            </button>
+            <button class="attack-button" onclick="triggerAttack('ddos')">
+              DDoS
+            </button>
+          </div>
+        </div>
+
+        <div class="control-card">
+          <h2>Log Control</h2>
+          <div class="button-group">
+            <button onclick="clearLogs()">Clear Logs</button>
+          </div>
+        </div>
       </div>
-      <div class="logs">
+
+      <div class="logs-container">
         <h2>Real-Time Logs</h2>
+        <div class="log-controls">
+          <button onclick="toggleAutoscroll()" id="autoscroll-toggle">
+            Autoscroll: ON
+          </button>
+        </div>
         <pre id="log-box">Loading logs...</pre>
       </div>
     </div>
 
     <script>
+      let autoscroll = true;
+      let isSnifferRunning = false;
+
+      // Check sniffer status periodically
+      function checkSnifferStatus() {
+        fetch("/status")
+          .then((res) => res.json())
+          .then((data) => {
+            isSnifferRunning = data.status === "running";
+            updateSnifferStatus();
+          })
+          .catch((err) => {
+            console.error("Error checking sniffer status:", err);
+            isSnifferRunning = false;
+            updateSnifferStatus();
+          });
+      }
+
+      function updateSnifferStatus() {
+        const statusElement = document.getElementById("sniffer-status");
+        if (isSnifferRunning) {
+          statusElement.textContent = "Running";
+          statusElement.className = "status-running";
+          document.getElementById("start-button").disabled = true;
+          document.getElementById("stop-button").disabled = false;
+        } else {
+          statusElement.textContent = "Stopped";
+          statusElement.className = "status-stopped";
+          document.getElementById("start-button").disabled = false;
+          document.getElementById("stop-button").disabled = true;
+        }
+      }
+
       function startSniffer() {
         fetch("/start_sniffer", {
           method: "POST",
         })
           .then((res) => res.json())
-          .then((data) => alert(data.message));
+          .then((data) => {
+            if (data.status === "success") {
+              isSnifferRunning = true;
+              updateSnifferStatus();
+              showNotification(data.message);
+            } else {
+              showNotification(data.message, "error");
+            }
+          })
+          .catch((err) => {
+            console.error("Error starting sniffer:", err);
+            showNotification("Failed to start sniffer", "error");
+          });
+      }
+
+      function stopSniffer() {
+        fetch("/stop_sniffer", {
+          method: "POST",
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.status === "success" || data.status === "warning") {
+              isSnifferRunning = false;
+              updateSnifferStatus();
+              showNotification(data.message);
+            } else {
+              showNotification(data.message, "error");
+            }
+          })
+          .catch((err) => {
+            console.error("Error stopping sniffer:", err);
+            showNotification("Failed to stop sniffer", "error");
+          });
       }
 
       function triggerAttack(type) {
+        if (!isSnifferRunning) {
+          showNotification("Start the sniffer first!", "warning");
+          return;
+        }
+
         fetch("/run_attack", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ attack: type }),
         })
           .then((res) => res.json())
-          .then((data) => alert(data.message));
+          .then((data) => {
+            showNotification(data.message, data.status);
+          })
+          .catch((err) => {
+            console.error("Error triggering attack:", err);
+            showNotification("Failed to trigger attack", "error");
+          });
       }
 
       function fetchLogs() {
         fetch("/logs")
           .then((res) => res.json())
           .then((data) => {
-            document.getElementById("log-box").textContent = data.logs.join("");
+            const logBox = document.getElementById("log-box");
+
+            // Format logs with color-coding
+            let formattedLogs = "";
+            data.logs.forEach((log) => {
+              if (log.includes("[THREAT]")) {
+                formattedLogs += `<span class="log-threat">${log}</span>`;
+              } else {
+                formattedLogs += `<span class="log-normal">${log}</span>`;
+              }
+            });
+
+            logBox.innerHTML = formattedLogs || "No logs available";
+
+            // Scroll to bottom if autoscroll is enabled
+            if (autoscroll) {
+              logBox.scrollTop = logBox.scrollHeight;
+            }
+          })
+          .catch((err) => {
+            console.error("Error fetching logs:", err);
           });
       }
 
-      setInterval(fetchLogs, 3000);
+      function clearLogs() {
+        fetch("/clear_logs", {
+          method: "POST",
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            showNotification(data.message, data.status);
+            fetchLogs();
+          })
+          .catch((err) => {
+            console.error("Error clearing logs:", err);
+            showNotification("Failed to clear logs", "error");
+          });
+      }
+
+      function toggleAutoscroll() {
+        autoscroll = !autoscroll;
+        document.getElementById(
+          "autoscroll-toggle"
+        ).textContent = `Autoscroll: ${autoscroll ? "ON" : "OFF"}`;
+      }
+
+      function showNotification(message, type = "success") {
+        const notification = document.createElement("div");
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+          notification.classList.add("show");
+
+          setTimeout(() => {
+            notification.classList.remove("show");
+            setTimeout(() => {
+              notification.remove();
+            }, 500);
+          }, 3000);
+        }, 100);
+      }
+
+      // Initialize
+      checkSnifferStatus();
       fetchLogs();
+
+      // Set intervals
+      setInterval(checkSnifferStatus, 5000);
+      setInterval(fetchLogs, 2000);
     </script>
   </body>
 </html>
