@@ -5,6 +5,7 @@ import platform
 import sys
 import signal
 import psutil
+import time
 
 app = Flask(__name__)
 LOG_FILE = "logs/network_traffic.log"
@@ -15,10 +16,10 @@ if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, "w") as f:
         f.write("")
 
-# Get Python executable path
 PYTHON_EXECUTABLE = sys.executable
 sniffer_process = None
 
+# Dictionary that maps attack type to script path
 SCRIPTS = {
     "phishing": "scripts/phishing.py",
     "sql": "scripts/sql.py",
@@ -39,64 +40,82 @@ def serve_static(path):
 @app.route("/status", methods=["GET"])
 def check_status():
     global sniffer_process
-    # Check if sniffer process is running
     is_running = False
-    
+    current_mode = "none"
+
     if sniffer_process is not None:
         try:
             process = psutil.Process(sniffer_process.pid)
             is_running = process.is_running()
+            # Check if there's a filter applied by inspecting command line arguments
+            cmdline = process.cmdline()
+            for arg in cmdline:
+                if arg.startswith("--attack="):
+                    current_mode = arg.split("=")[1]
         except (psutil.NoSuchProcess, AttributeError):
+            sniffer_process = None
             is_running = False
-    
-    return jsonify({"status": "running" if is_running else "stopped"})
+
+    return jsonify({
+        "status": "running" if is_running else "stopped",
+        "mode": current_mode
+    })
 
 @app.route("/start_sniffer", methods=["POST"])
 def start_sniffer():
     global sniffer_process
     
+    attack_type = request.json.get("filter")  # Get optional filter
+    
     try:
-        # Kill any existing process first
         if sniffer_process is not None:
-            try:
-                if platform.system() == "Windows":
-                    sniffer_process.terminate()
-                else:
-                    os.killpg(os.getpgid(sniffer_process.pid), signal.SIGTERM)
-            except:
-                pass
+            stop_sniffer()  # stop any running instance first
         
-        # Start a new process
+        # Clear logs before starting
+        if request.json.get("clear_logs", False):
+            with open(LOG_FILE, "w") as f:
+                f.write("")
+        
+        cmd = [PYTHON_EXECUTABLE, "script.py", "--start"]  # Add the start flag
+        
+        # Add attack filter if provided
+        if attack_type and attack_type in SCRIPTS.keys():
+            cmd.append(f"--attack={attack_type}")
+        
+        # Determine how to start the script based on OS
         if platform.system() == "Windows":
             sniffer_process = subprocess.Popen(
-                [PYTHON_EXECUTABLE, "script.py"],
+                cmd,
                 creationflags=subprocess.CREATE_NEW_CONSOLE
             )
-        elif platform.system() == "Linux":
-            sniffer_process = subprocess.Popen(
-                [PYTHON_EXECUTABLE, "script.py"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                preexec_fn=os.setsid
-            )
-        elif platform.system() == "Darwin":  # macOS
-            sniffer_process = subprocess.Popen(
-                [PYTHON_EXECUTABLE, "script.py"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                preexec_fn=os.setsid
-            )
         else:
-            return jsonify({"status": "error", "message": "Unsupported OS"})
-
-        return jsonify({"status": "success", "message": "Packet sniffer started successfully."})
+            sniffer_process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=os.setsid
+            )
+        
+        # Small delay to ensure process starts properly
+        time.sleep(0.5)
+        
+        if attack_type:
+            return jsonify({
+                "status": "success", 
+                "message": f"Packet sniffer started with {attack_type.upper()} filter."
+            })
+        else:
+            return jsonify({
+                "status": "success", 
+                "message": "Packet sniffer started successfully."
+            })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/stop_sniffer", methods=["POST"])
 def stop_sniffer():
     global sniffer_process
-    
+
     try:
         if sniffer_process is not None:
             if platform.system() == "Windows":
@@ -114,14 +133,43 @@ def stop_sniffer():
 def run_attack():
     attack_type = request.json.get("attack")
     script = SCRIPTS.get(attack_type)
-    
+
     if script and os.path.exists(script):
         try:
+            # Start the sniffer with the current attack mode if not already running
+            if sniffer_process is None:
+                start_sniffer_result = start_sniffer()
+                response_data = start_sniffer_result.get_json()
+                if response_data.get("status") != "success":
+                    return jsonify({
+                        "status": "error", 
+                        "message": "Failed to start packet sniffer before attack."
+                    })
+            
+            # Run the attack script
             subprocess.Popen([PYTHON_EXECUTABLE, script])
-            return jsonify({"status": "success", "message": f"{attack_type.upper()} simulation running."})
+            
+            return jsonify({
+                "status": "success", 
+                "message": f"{attack_type.upper()} simulation running."
+            })
         except Exception as e:
-            return jsonify({"status": "error", "message": f"Error executing {attack_type} script: {str(e)}"})
-    return jsonify({"status": "error", "message": "Invalid attack type or script not found."})
+            return jsonify({
+                "status": "error", 
+                "message": f"Error executing {attack_type} script: {str(e)}"
+            })
+    return jsonify({
+        "status": "error", 
+        "message": "Invalid attack type or script not found."
+    })
+
+@app.route("/filter_logs", methods=["POST"])
+def filter_logs():
+    attack_type = request.json.get("filter")
+    
+    # Restart the sniffer with the new filter
+    result = start_sniffer()
+    return result
 
 @app.route("/logs", methods=["GET"])
 def read_logs():

@@ -1,246 +1,362 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IDS Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css" />
-  </head>
-  <body>
-    <div class="header">
-      <h1>Intrusion Detection System Dashboard</h1>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Security Monitor</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f5f5f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            font-weight: bold;
+            background-color: #343a40;
+            color: white;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+        }
+        .log-container {
+            height: 500px;
+            overflow-y: auto;
+            background-color: #222;
+            color: #33ff33;
+            font-family: monospace;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .btn-group {
+            margin-bottom: 15px;
+        }
+        .btn-attack {
+            margin: 5px;
+            min-width: 120px;
+        }
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-running {
+            background-color: #28a745;
+        }
+        .status-stopped {
+            background-color: #dc3545;
+        }
+        .alert {
+            margin-top: 15px;
+        }
+        .phishing { color: #ff9966; }
+        .sql { color: #ff6666; }
+        .scan { color: #66ccff; }
+        .ddos { color: #ff66ff; }
+        .normal { color: #33ff33; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center mb-4">Network Attack Simulation & IDS</h1>
+        
+        <div class="row">
+            <!-- Control Panel -->
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Control Panel</div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <span class="status-indicator" id="status-light"></span>
+                                <span id="status-text">Checking status...</span>
+                            </div>
+                            <div id="current-mode-container" style="display: none;">
+                                <span class="badge bg-info" id="current-mode"></span>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button id="start-btn" class="btn btn-success mb-2">Start Monitoring</button>
+                            <button id="stop-btn" class="btn btn-danger mb-3">Stop Monitoring</button>
+                        </div>
+                        
+                        <hr>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Filter Logs By:</label>
+                            <select id="filter-select" class="form-select">
+                                <option value="">All Traffic</option>
+                                <option value="phishing">Phishing</option>
+                                <option value="sql">SQL Injection</option>
+                                <option value="scan">Port Scans</option>
+                                <option value="tcp">TCP Traffic</option>
+                                <option value="udp">UDP Traffic</option>
+                                <option value="ddos">DDoS</option>
+                            </select>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button id="apply-filter-btn" class="btn btn-primary mb-2">Apply Filter</button>
+                            <button id="clear-logs-btn" class="btn btn-warning">Clear Logs</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">Attack Simulation</div>
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap justify-content-center">
+                            <button class="btn btn-outline-warning btn-attack" data-attack="phishing">
+                                Phishing
+                            </button>
+                            <button class="btn btn-outline-danger btn-attack" data-attack="sql">
+                                SQL Injection
+                            </button>
+                            <button class="btn btn-outline-info btn-attack" data-attack="scan">
+                                Port Scan
+                            </button>
+                            <button class="btn btn-outline-secondary btn-attack" data-attack="tcp">
+                                TCP Flood
+                            </button>
+                            <button class="btn btn-outline-primary btn-attack" data-attack="udp">
+                                UDP Flood
+                            </button>
+                            <button class="btn btn-outline-dark btn-attack" data-attack="ddos">
+                                DDoS
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Log Viewer -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Live Network Traffic Logs</span>
+                        <div>
+                            <label class="form-check-label">
+                                <input class="form-check-input" type="checkbox" id="auto-scroll" checked>
+                                Auto-scroll
+                            </label>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="log-container" id="log-viewer">
+                            <div class="text-center text-muted pt-5">
+                                <p>Waiting for logs...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="alert-container"></div>
+            </div>
+        </div>
     </div>
 
-    <div class="container">
-      <div class="controls">
-        <div class="control-card">
-          <h2>Sniffer Control</h2>
-          <div class="status-indicator">
-            Status: <span id="sniffer-status">Checking...</span>
-          </div>
-          <div class="button-group">
-            <button id="start-button" onclick="startSniffer()">
-              Start Sniffer
-            </button>
-            <button id="stop-button" onclick="stopSniffer()">
-              Stop Sniffer
-            </button>
-          </div>
-        </div>
-
-        <div class="control-card">
-          <h2>Attack Simulation</h2>
-          <div class="button-group">
-            <button class="attack-button" onclick="triggerAttack('phishing')">
-              Phishing
-            </button>
-            <button class="attack-button" onclick="triggerAttack('sql')">
-              SQL Injection
-            </button>
-            <button class="attack-button" onclick="triggerAttack('scan')">
-              Port Scan
-            </button>
-            <button class="attack-button" onclick="triggerAttack('tcp')">
-              TCP Normal
-            </button>
-            <button class="attack-button" onclick="triggerAttack('udp')">
-              UDP Normal
-            </button>
-            <button class="attack-button" onclick="triggerAttack('ddos')">
-              DDoS
-            </button>
-          </div>
-        </div>
-
-        <div class="control-card">
-          <h2>Log Control</h2>
-          <div class="button-group">
-            <button onclick="clearLogs()">Clear Logs</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="logs-container">
-        <h2>Real-Time Logs</h2>
-        <div class="log-controls">
-          <button onclick="toggleAutoscroll()" id="autoscroll-toggle">
-            Autoscroll: ON
-          </button>
-        </div>
-        <pre id="log-box">Loading logs...</pre>
-      </div>
-    </div>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
     <script>
-      let autoscroll = true;
-      let isSnifferRunning = false;
-
-      // Check sniffer status periodically
-      function checkSnifferStatus() {
-        fetch("/status")
-          .then((res) => res.json())
-          .then((data) => {
-            isSnifferRunning = data.status === "running";
-            updateSnifferStatus();
-          })
-          .catch((err) => {
-            console.error("Error checking sniffer status:", err);
-            isSnifferRunning = false;
-            updateSnifferStatus();
-          });
-      }
-
-      function updateSnifferStatus() {
-        const statusElement = document.getElementById("sniffer-status");
-        if (isSnifferRunning) {
-          statusElement.textContent = "Running";
-          statusElement.className = "status-running";
-          document.getElementById("start-button").disabled = true;
-          document.getElementById("stop-button").disabled = false;
-        } else {
-          statusElement.textContent = "Stopped";
-          statusElement.className = "status-stopped";
-          document.getElementById("start-button").disabled = false;
-          document.getElementById("stop-button").disabled = true;
-        }
-      }
-
-      function startSniffer() {
-        fetch("/start_sniffer", {
-          method: "POST",
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.status === "success") {
-              isSnifferRunning = true;
-              updateSnifferStatus();
-              showNotification(data.message);
-            } else {
-              showNotification(data.message, "error");
-            }
-          })
-          .catch((err) => {
-            console.error("Error starting sniffer:", err);
-            showNotification("Failed to start sniffer", "error");
-          });
-      }
-
-      function stopSniffer() {
-        fetch("/stop_sniffer", {
-          method: "POST",
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.status === "success" || data.status === "warning") {
-              isSnifferRunning = false;
-              updateSnifferStatus();
-              showNotification(data.message);
-            } else {
-              showNotification(data.message, "error");
-            }
-          })
-          .catch((err) => {
-            console.error("Error stopping sniffer:", err);
-            showNotification("Failed to stop sniffer", "error");
-          });
-      }
-
-      function triggerAttack(type) {
-        if (!isSnifferRunning) {
-          showNotification("Start the sniffer first!", "warning");
-          return;
-        }
-
-        fetch("/run_attack", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ attack: type }),
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            showNotification(data.message, data.status);
-          })
-          .catch((err) => {
-            console.error("Error triggering attack:", err);
-            showNotification("Failed to trigger attack", "error");
-          });
-      }
-
-      function fetchLogs() {
-        fetch("/logs")
-          .then((res) => res.json())
-          .then((data) => {
-            const logBox = document.getElementById("log-box");
-
-            // Format logs with color-coding
-            let formattedLogs = "";
-            data.logs.forEach((log) => {
-              if (log.includes("[THREAT]")) {
-                formattedLogs += `<span class="log-threat">${log}</span>`;
-              } else {
-                formattedLogs += `<span class="log-normal">${log}</span>`;
-              }
+        $(document).ready(function() {
+            // Check status initially
+            checkStatus();
+            
+            // Poll status every 3 seconds
+            setInterval(checkStatus, 3000);
+            
+            // Poll logs every 1 second
+            setInterval(fetchLogs, 1000);
+            
+            // Set up button handlers
+            $("#start-btn").click(function() {
+                startSniffer();
             });
-
-            logBox.innerHTML = formattedLogs || "No logs available";
-
-            // Scroll to bottom if autoscroll is enabled
-            if (autoscroll) {
-              logBox.scrollTop = logBox.scrollHeight;
+            
+            $("#stop-btn").click(function() {
+                stopSniffer();
+            });
+            
+            $("#clear-logs-btn").click(function() {
+                clearLogs();
+            });
+            
+            $("#apply-filter-btn").click(function() {
+                applyFilter();
+            });
+            
+            // Attack simulation buttons
+            $(".btn-attack").click(function() {
+                const attackType = $(this).data("attack");
+                runAttack(attackType);
+            });
+            
+            // Functions
+            function checkStatus() {
+                $.get("/status", function(data) {
+                    if (data.status === "running") {
+                        $("#status-light").removeClass("status-stopped").addClass("status-running");
+                        $("#status-text").text("Monitoring Active");
+                        $("#start-btn").prop("disabled", true);
+                        $("#stop-btn").prop("disabled", false);
+                        
+                        // Show active mode if any
+                        if (data.mode && data.mode !== "none") {
+                            $("#current-mode-container").show();
+                            $("#current-mode").text("Filter: " + data.mode.toUpperCase());
+                        } else {
+                            $("#current-mode-container").show();
+                            $("#current-mode").text("All Traffic");
+                        }
+                    } else {
+                        $("#status-light").removeClass("status-running").addClass("status-stopped");
+                        $("#status-text").text("Monitoring Stopped");
+                        $("#start-btn").prop("disabled", false);
+                        $("#stop-btn").prop("disabled", true);
+                        $("#current-mode-container").hide();
+                    }
+                });
             }
-          })
-          .catch((err) => {
-            console.error("Error fetching logs:", err);
-          });
-      }
-
-      function clearLogs() {
-        fetch("/clear_logs", {
-          method: "POST",
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            showNotification(data.message, data.status);
-            fetchLogs();
-          })
-          .catch((err) => {
-            console.error("Error clearing logs:", err);
-            showNotification("Failed to clear logs", "error");
-          });
-      }
-
-      function toggleAutoscroll() {
-        autoscroll = !autoscroll;
-        document.getElementById(
-          "autoscroll-toggle"
-        ).textContent = `Autoscroll: ${autoscroll ? "ON" : "OFF"}`;
-      }
-
-      function showNotification(message, type = "success") {
-        const notification = document.createElement("div");
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-          notification.classList.add("show");
-
-          setTimeout(() => {
-            notification.classList.remove("show");
-            setTimeout(() => {
-              notification.remove();
-            }, 500);
-          }, 3000);
-        }, 100);
-      }
-
-      // Initialize
-      checkSnifferStatus();
-      fetchLogs();
-
-      // Set intervals
-      setInterval(checkSnifferStatus, 5000);
-      setInterval(fetchLogs, 2000);
+            
+            function startSniffer() {
+                const filter = $("#filter-select").val();
+                
+                $.ajax({
+                    url: "/start_sniffer",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        filter: filter,
+                        clear_logs: true
+                    }),
+                    success: function(data) {
+                        showAlert(data.message, data.status);
+                        checkStatus();
+                    },
+                    error: function() {
+                        showAlert("Failed to start packet monitoring", "error");
+                    }
+                });
+            }
+            
+            function stopSniffer() {
+                $.ajax({
+                    url: "/stop_sniffer",
+                    type: "POST",
+                    success: function(data) {
+                        showAlert(data.message, data.status);
+                        checkStatus();
+                    },
+                    error: function() {
+                        showAlert("Failed to stop packet monitoring", "error");
+                    }
+                });
+            }
+            
+            function applyFilter() {
+                const filter = $("#filter-select").val();
+                
+                $.ajax({
+                    url: "/filter_logs",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        filter: filter
+                    }),
+                    success: function(data) {
+                        showAlert("Filter applied: " + (filter ? filter.toUpperCase() : "All Traffic"), "success");
+                        checkStatus();
+                    },
+                    error: function() {
+                        showAlert("Failed to apply filter", "error");
+                    }
+                });
+            }
+            
+            function runAttack(attackType) {
+                $.ajax({
+                    url: "/run_attack",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({
+                        attack: attackType
+                    }),
+                    success: function(data) {
+                        showAlert(data.message, data.status);
+                    },
+                    error: function() {
+                        showAlert("Failed to run attack simulation", "error");
+                    }
+                });
+            }
+            
+            function clearLogs() {
+                $.ajax({
+                    url: "/clear_logs",
+                    type: "POST",
+                    success: function(data) {
+                        showAlert(data.message, data.status);
+                        $("#log-viewer").html('<div class="text-center text-muted pt-5"><p>Logs cleared</p></div>');
+                    },
+                    error: function() {
+                        showAlert("Failed to clear logs", "error");
+                    }
+                });
+            }
+            
+            function fetchLogs() {
+                $.get("/logs", function(data) {
+                    if (data.logs && data.logs.length > 0) {
+                        const logContainer = $("#log-viewer");
+                        logContainer.empty();
+                        
+                        data.logs.forEach(function(log) {
+                            let logClass = "normal";
+                            
+                            if (log.includes("PHISHING")) logClass = "phishing";
+                            else if (log.includes("SQL INJECTION")) logClass = "sql";
+                            else if (log.includes("SCAN") || log.includes("FIN") || log.includes("SYN") || log.includes("XMAS")) logClass = "scan";
+                            else if (log.includes("DDoS")) logClass = "ddos";
+                            
+                            logContainer.append(`<div class="${logClass}">${log}</div>`);
+                        });
+                        
+                        // Auto-scroll to bottom if enabled
+                        if ($("#auto-scroll").is(":checked")) {
+                            logContainer.scrollTop(logContainer[0].scrollHeight);
+                        }
+                    }
+                });
+            }
+            
+            function showAlert(message, status) {
+                const alertClass = status === "success" ? "alert-success" : 
+                                  status === "warning" ? "alert-warning" : "alert-danger";
+                
+                const alertHTML = `
+                    <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                `;
+                
+                $("#alert-container").html(alertHTML);
+                
+                // Auto-dismiss after 5 seconds
+                setTimeout(function() {
+                    $(".alert").alert('close');
+                }, 5000);
+            }
+        });
     </script>
-  </body>
+</body>
 </html>
